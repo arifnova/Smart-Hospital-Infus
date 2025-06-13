@@ -27,64 +27,78 @@ const InfusionData = () => {
       const val = snapshot.val();
       if (val) {
         const allDatesSet = new Set();
-        const latestKantongKey = Object.keys(val).sort().slice(-1)[0];
-        const tanggalData = val[latestKantongKey] || {};
-        const latestTanggalKey = Object.keys(tanggalData).sort().slice(-1)[0];
-        const realtimeRaw = tanggalData[latestTanggalKey] || {};
+        let latestKantongKey = "";
+        let latestTanggalKey = "";
 
-        const realtimeData = Object.entries(realtimeRaw).map(
-          ([time, { BERAT }]) => ({
-            kantong: latestKantongKey,
-            date: latestTanggalKey,
-            time,
-            volume: BERAT,
-            timestamp: new Date(`${latestTanggalKey}T${time}`).getTime(),
-          })
-        );
+        const allData = [];
 
-        // Ambil semua tanggal dari semua kantong
-        Object.values(val).forEach((tanggalObj) => {
-          Object.keys(tanggalObj).forEach((tgl) => allDatesSet.add(tgl));
+        Object.entries(val).forEach(([kantong, tanggalObj]) => {
+          Object.entries(tanggalObj).forEach(([tanggal, timeObj]) => {
+            allDatesSet.add(tanggal);
+            Object.entries(timeObj).forEach(([time, { BERAT }]) => {
+              allData.push({
+                kantong,
+                date: tanggal,
+                time,
+                volume: BERAT,
+                timestamp: new Date(`${tanggal}T${time}`).getTime(),
+              });
+            });
+          });
         });
+
+        // Tentukan kantong dan tanggal terakhir untuk ditampilkan di bagian atas
+        const latestEntry = allData.sort(
+          (a, b) => b.timestamp - a.timestamp
+        )[0];
+        if (latestEntry) {
+          latestKantongKey = latestEntry.kantong;
+          latestTanggalKey = latestEntry.date;
+        }
 
         setInfusCount(Object.keys(val).length);
         setLatestKantong(latestKantongKey);
         setLatestTanggal(latestTanggalKey);
-        setData(realtimeData.sort((a, b) => a.timestamp - b.timestamp));
+        setData(
+          allData
+            .filter((entry) => entry.date === latestTanggalKey)
+            .sort((a, b) => a.timestamp - b.timestamp)
+        );
         setAvailableDates(Array.from(allDatesSet).sort());
       }
     });
   }, []);
 
   const handleDateChange = (e) => {
-    const date = e.target.value;
-    setSelectedDate(date);
+  const date = e.target.value;
+  setSelectedDate(date);
 
-    const dateRef = ref(database, "DATA_SENSOR/");
-    onValue(dateRef, (snapshot) => {
-      const val = snapshot.val();
-      const entries = [];
+  const dateRef = ref(database, "DATA_SENSOR/");
+  onValue(dateRef, (snapshot) => {
+    const val = snapshot.val();
+    const entries = [];
 
-      if (val) {
-        Object.entries(val).forEach(([kantong, tanggalData]) => {
-          const jamData = tanggalData[date];
-          if (jamData) {
-            Object.entries(jamData).forEach(([time, { BERAT }]) => {
-              entries.push({
-                kantong,
-                date,
-                time,
-                volume: BERAT,
-                timestamp: new Date(`${date}T${time}`).getTime(),
-              });
+    if (val) {
+      Object.entries(val).forEach(([kantong, tanggalData]) => {
+        const jamData = tanggalData[date];
+        if (jamData) {
+          Object.entries(jamData).forEach(([time, { BERAT }]) => {
+            entries.push({
+              kantong,
+              date,
+              time,
+              volume: BERAT,
+              timestamp: new Date(`${date}T${time}`).getTime(),
             });
-          }
-        });
-      }
+          });
+        }
+      });
+    }
 
-      setSelectedData(entries.sort((a, b) => a.timestamp - b.timestamp));
-    });
-  };
+    setSelectedData(entries.sort((a, b) => a.timestamp - b.timestamp));
+  });
+};
+
 
   const downloadPDF = () => {
     const doc = new jsPDF();
